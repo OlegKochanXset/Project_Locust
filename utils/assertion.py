@@ -1,6 +1,6 @@
 from config.config import logger
 
-def ckeck_http_response(response, param_to_check) -> bool:
+def check_http_response(response, param_to_check) -> bool:
     result=None
 
     try:
