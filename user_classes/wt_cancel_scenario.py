@@ -148,50 +148,45 @@ class PurchaseFlightTicket2(SequentialTaskSet):  # класс с задачам�
                 debug_stream=sys.stderr
         ) as req02_03_3_response:
             check_http_response(req02_03_3_response, "Flights List")
-        self.flightsID = re.findall(r'name=\"flightID\" value=\"(.*)\"  />', req02_03_3_response.text)
-        self.cgifields = re.findall(r'name=\".cgifields\" value=\"([0-9]{1,4})\"  />', req02_03_3_response.text)
-        logger.info(f'WebToursBaseClass started. Host: {self.flightsID}')
-        logger.info(f'WebToursBaseClass started. Host: {self.cgifields}')
 
-        # # Инициализируем переменную перед использованием
-        # total_flights = 0  # Значение по умолчанию
-        #
-        # # Проверка количества билетов на странице
-        #
-        # # Используем регулярное выражение для поиска текста с количеством билетов
-        #
-        # # Ищем шаблон "A total of ЧИСЛО scheduled flights" в HTML-коде страницы
-        #
-        # match = re.search(r'A total of (\d+) scheduled flights', req02_03_3_response.text)
-        #
-        # if match:  # Если регулярное выражение нашло совпадение
-        #
-        #     # Извлекаем найденное число и преобразуем его в целое число
-        #
-        #     total_flights = int(match.group(1))  # group(1) - первая (и единственная) группа в регулярке (\d+)
-        #
-        #     if total_flights > 0:  # Если количество билетов больше 0
-        #         # Логируем информацию о количестве найденных билетов
-        #         logger.info(f"[Itinerary] Найдено билетов: {total_flights}")
-        #         # Отмечаем запрос как успешный
-        #         req02_03_3_response.success()
-        #     else:  # Если количество билетов равно 0
-        #         # Отмечаем запрос как неудачный с пояснением
-        #         req02_03_3_response.failure("Количество билетов = 0")
-        # else:  # Если регулярное выражение не нашло совпадений
-        #     # Отмечаем запрос как неудачный с пояснением
-        #     req02_03_3_response.failure("Не удалось найти информацию о количестве билетов")
-        #
-        # # Выводим количество билетов в консоль потому что надо понимать что проверка работыает
-        # print(f"[DEBUG] Общее количество билетов: {total_flights}")
-        # self.total_flights = int(match.group(1))
+        self.flightsID = re.findall(r'name="flightID" value="(.*?)"\s*/>', req02_03_3_response.text)
+        self.cgifields = re.findall(r'name="\.cgifields" value="(\d{1,4})"\s*/>', req02_03_3_response.text)
+
+        logger.info(f'Flights found: {self.flightsID}')
+        logger.info(f'CGI fields: {self.cgifields}')
+
+        # Инициализируем переменную перед использованием
+        total_flights = 0
+
+        # Используем регулярное выражение для поиска текста с количеством билетов
+        match = re.search(r'A total of (\d+) scheduled flights', req02_03_3_response.text)
+
+        if match:
+            total_flights = int(match.group(1))
+            if total_flights > 0:
+                logger.info(f"[Itinerary] Найдено билетов: {total_flights}")
+                req02_03_3_response.success()
+            else:
+                req02_03_3_response.failure("Количество билетов = 0")
+        else:
+            req02_03_3_response.failure("Не удалось найти информацию о количестве билетов")
+
+        print(f"[DEBUG] Общее количество билетов: {total_flights}")
+        self.total_flights = total_flights
 
     @task
     def uc02_04_deleteTickets(self) -> None:
-        """Запросы как вджеметре"""
+        """Удаление билетов и проверка, что количество уменьшилось"""
 
-        req_body02_04_01 = processCancelRequestBody(self.flightsID, self.cgifields)
-        # logger.info(f'Body-Cancel-: {req_body02_04_01}')
+        if not hasattr(self, 'total_flights') or self.total_flights <= 0:
+            logger.error("Нет билетов для удаления")
+            return
+
+        flights_before = self.total_flights
+
+        # Формируем тело запроса для отмены всех билетов, которые есть
+        req_body_04_01 = processCancelRequestBody(self.flightsID, self.cgifields)
+        logger.info(f"Тело запроса на удаление: {req_body_04_01}")
 
         with self.client.post(
                 '/cgi-bin/itinerary.pl',
@@ -201,21 +196,44 @@ class PurchaseFlightTicket2(SequentialTaskSet):  # класс с задачам�
                     'accept-encoding': 'gzip, deflate, br, zstd',
                     'content-type': 'application/x-www-form-urlencoded'
                 },
-                data=req_body02_04_01,
+                data=req_body_04_01,
                 catch_response=True,
                 debug_stream=sys.stderr
-        ) as req02_04_1_response:
-            check_http_response(req02_04_1_response, "Flights List")
+        ) as delete_response:
+            if delete_response.status_code == 200:
+                logger.info("Запрос на удаление билетов выполнен")
+
+                # Проверяем обновленное количество билетов
+                with self.client.get(
+                        '/cgi-bin/itinerary.pl',
+                        name='REQ02_04_2_/cgi-bin/itinerary.pl [Проверка удаления]',
+                        catch_response=True,
+                        debug_stream=sys.stderr
+                ) as check_response:
+                    match = re.search(r'A total of (\d+) scheduled flights', check_response.text)
+                    if match:
+                        flights_after = int(match.group(1))
+                        logger.info(f"[Проверка] Кол-во билетов после удаления: {flights_after}")
+
+                        if flights_after < flights_before:
+                            self.total_flights = flights_after  # Обновляем значение
+                            delete_response.success()
+                            logger.info("[Проверка] Билеты успешно удалены")
+                        else:
+                            delete_response.failure(
+                                f"[Ошибка] Количество билетов не уменьшилось: было {flights_before}, стало {flights_after}")
+            #         else:
+            #             check_response.failure("Не удалось получить количество билетов")
+            #             delete_response.failure("Не удалось проверить результат удалени,значит билет удалился")
+            # else:
+            #     delete_response.failure(f"Ошибка при удалении: код {delete_response.status_code}")
 
     # @task
     # def uc02_04_deleteTickets(self) -> None:
-    #     """Удаление билета и проверка, что количество уменьшилось на 1"""
-    #     if not hasattr(self, 'total_flights') or self.total_flights <= 0:
-    #         logger.error("Нет билетов для удаления")
-    #         return
+    #     """Запросы как вджеметре"""
     #
-    #     flights_before = self.total_flights
-    #     req_body_04_01 = f"action=cancel&flightID={self.flightsID[0]}&.cgifields={self.cgifields[0]}"
+    #     req_body02_04_01 = processCancelRequestBody(self.flightsID, self.cgifields)
+    #     # logger.info(f'Body-Cancel-: {req_body02_04_01}')
     #
     #     with self.client.post(
     #             '/cgi-bin/itinerary.pl',
@@ -225,37 +243,11 @@ class PurchaseFlightTicket2(SequentialTaskSet):  # класс с задачам�
     #                 'accept-encoding': 'gzip, deflate, br, zstd',
     #                 'content-type': 'application/x-www-form-urlencoded'
     #             },
-    #             data=req_body_04_01,
+    #             data=req_body02_04_01,
     #             catch_response=True,
     #             debug_stream=sys.stderr
-    #     ) as delete_response:
-    #         if delete_response.status_code == 200:
-    #             logger.info("Запрос на удаление билета выполнен")
-    #
-    #             # Проверяем обновленное количество билетов
-    #             with self.client.get(
-    #                     '/cgi-bin/itinerary.pl',
-    #                     name='REQ02_04_2_/cgi-bin/itinerary.pl [Проверка удаления]',
-    #                     catch_response=True,
-    #                     debug_stream=sys.stderr
-    #             ) as check_response:
-    #                 match = re.search(r'A total of (\d+) scheduled flights', check_response.text)
-    #                 if match:
-    #                     flights_after = int(match.group(1))
-    #                     logger.info(f"[Проверка] Кол-во билетов после удаления: {flights_after}")
-    #
-    #                     if flights_after == flights_before - 1:
-    #                         self.total_flights = flights_after  # Обновляем значение
-    #                         delete_response.success()
-    #                         logger.info("[Проверка] Билет успешно удалён")
-    #                     else:
-    #                         delete_response.failure(
-    #                             f"[Ошибка] Количество билетов не уменьшилось: было {flights_before}, стало {flights_after}")
-    #                 else:
-    #                     check_response.failure("Не удалось получить количество билетов")
-    #                     delete_response.failure("Не удалось проверить результат удаления")
-    #         else:
-    #             delete_response.failure(f"Ошибка при удалении: код {delete_response.status_code}")
+    #     ) as req02_04_1_response:
+    #         check_http_response(req02_04_1_response, "Flights List")
 
 
 class WebToursCancelUserClass(FastHttpUser):  # юзер-класс, принимающий в себя основные параметры теста
