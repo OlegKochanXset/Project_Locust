@@ -222,11 +222,70 @@ class PurchaseFlightTicket2(SequentialTaskSet):  # класс с задачам�
                         else:
                             delete_response.failure(
                                 f"[Ошибка] Количество билетов не уменьшилось: было {flights_before}, стало {flights_after}")
-            #         else:
-            #             check_response.failure("Не удалось получить количество билетов")
-            #             delete_response.failure("Не удалось проверить результат удалени,значит билет удалился")
-            # else:
-            #     delete_response.failure(f"Ошибка при удалении: код {delete_response.status_code}")
+
+    # @task
+    # def uc02_03_openItinerary(self):
+    #     with self.client.get(
+    #             '/cgi-bin/welcome.pl?page=itinerary',
+    #             name='REQ02_03_1_/cgi-bin/welcome.pl?page=itinerary',
+    #             headers={
+    #                 'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+    #                 'accept-encoding': 'gzip, deflate, br, zstd'
+    #             },
+    #             debug_stream=sys.stderr
+    #     ) as req02_03_1_response:
+    #         check_http_response(req02_03_1_response, "User wants the intineraries.")
+    #
+    #     with self.client.get(
+    #             '/cgi-bin/nav.pl?page=menu&in=itinerary',
+    #             name='REQ02_03_2_/cgi-bin/nav.pl?page=menu&in=itinerary',
+    #             headers={
+    #                 'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+    #                 'accept-encoding': 'gzip, deflate, br, zstd'
+    #             },
+    #             allow_redirects=False,
+    #             debug_stream=sys.stderr
+    #     ) as req02_03_2_response:
+    #         check_http_response(req02_03_2_response, "<title>Web Tours Navigation Bar</title>")
+    #
+    #     with self.client.get(
+    #             '/cgi-bin/itinerary.pl',
+    #             name='REQ02_03_3_/cgi-bin/itinerary.pl',
+    #             headers={
+    #                 'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+    #                 'accept-encoding': 'gzip, deflate, br, zstd'
+    #             },
+    #             allow_redirects=False,
+    #             catch_response=True,
+    #             debug_stream=sys.stderr
+    #     ) as req02_03_3_response:
+    #         check_http_response(req02_03_3_response, "Flights List")
+    #
+    #     self.flightsID = re.findall(r'name="flightID" value="(.*?)"\s*/>', req02_03_3_response.text)
+    #     self.cgifields = re.findall(r'name="\.cgifields" value="(\d{1,4})"\s*/>', req02_03_3_response.text)
+
+    # @task
+    # def uc02_04_deleteTickets(self) -> None:
+    #     """Запросы как вджеметре"""
+    #
+    #     req_body02_04_01 = processCancelRequestBody(self.flightsID, self.cgifields)
+    #     # logger.info(f'Body-Cancel-: {req_body02_04_01}')
+    #
+    #     with self.client.post(
+    #             '/cgi-bin/itinerary.pl',
+    #             name='REQ02_04_1_/cgi-bin/itinerary.pl',
+    #             headers={
+    #                 'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+    #                 'accept-encoding': 'gzip, deflate, br, zstd',
+    #                 'content-type': 'application/x-www-form-urlencoded'
+    #             },
+    #             data=req_body02_04_01,
+    #             catch_response=True,
+    #             debug_stream=sys.stderr
+    #     ) as req02_04_1_response:
+    #         check_http_response(req02_04_1_response, "Flights List")
+
+
 
     # @task
     # def uc02_04_deleteTickets(self) -> None:
@@ -251,7 +310,7 @@ class PurchaseFlightTicket2(SequentialTaskSet):  # класс с задачам�
 
 
 class WebToursCancelUserClass(FastHttpUser):  # юзер-класс, принимающий в себя основные параметры теста
-    wait_time = constant_pacing(cfg.pacing)
+    wait_time = constant_pacing(cfg.webtours_cancel.pacing)
     host = cfg.url
 
     logger.info(f'WebToursBaseClass started. Host: {host}')

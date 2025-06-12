@@ -7,15 +7,15 @@ class CustomLoadShape(LoadTestShape):
         Здесь должны быть описаны типы нагрузки с помощью stages
     """
     match cfg.loadshape_type:
-       case 'baseline':
-           stages = [
-               {'duration': 50, 'users': 1, 'spawn_rate': 1}
-           ]
-       case 'fixeload':
+        case 'baseline':
+            stages = [
+                {'duration': 50, 'users': 2, 'spawn_rate': 1}
+            ]
+        case 'fixeload':
             stages = [
                 {'duration': 300, 'users': 10, 'spawn_rate': 1}
             ]
-       case 'baseline':
+        case 'stages':
             stages = [
                 {'duration': 600, 'users': 10, 'spawn_rate': 2},
                 {'duration': 600, 'users': 20, 'spawn_rate': 2},
@@ -24,7 +24,7 @@ class CustomLoadShape(LoadTestShape):
                 {'duration': 600, 'users': 50, 'spawn_rate': 2},
             ]
 
-    def tick(self): # стандартная функция локаста, взятая из документации, для работы с кастомными "Лоад-Шейпами"
+    def tick(self):  # стандартная функция локаста, взятая из документации, для работы с кастомными "Лоад-Шейпами"
         run_time = self.get_run_time()
 
         for stage in self.stages:

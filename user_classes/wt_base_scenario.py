@@ -214,7 +214,7 @@ class PurchaseFlightTicket(SequentialTaskSet):  # класс с задачами
 
 
 class WebToursBaseUserClass(FastHttpUser):  # юзер-класс, принимающий в себя основные параметры теста
-    wait_time = constant_pacing(cfg.pacing)
+    wait_time = constant_pacing(cfg.webtours_base.pacing)
     host = cfg.url
 
     logger.info(f'WebToursBaseClass started. Host: {host}')
